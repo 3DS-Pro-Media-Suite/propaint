@@ -1,0 +1,6 @@
+[submodule "tpressure"]
+	path = tpressure
+	url = ../tpressure
+[submodule "ftpserver"]
+	path = ftpserver
+	url = ../ftpserver
