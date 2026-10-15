@@ -1,0 +1,14 @@
+Pro Paint uses the following third-party material.
+
+Quicksand font (assets/font/Quicksand-Bold.ttf and source/data/font.h made from it)
+  Copyright 2011 The Quicksand Project Authors.
+  SIL Open Font License 1.1, see OFL.txt.
+
+Krita brush presets and textures (romfs/brushes/*.kpp, romfs/textures/*.png)
+  From Krita 4's default resource bundle (Krita_4_Default_Resources.bundle),
+  by David Revoy (Deevad) with derivations of brushes by Ramon Miranda,
+  Razvanc, Radian, Wolthera, Storm, Scottyp and others.
+  The bundle is released under CC0 1.0. Credited with thanks. https://krita.org
+
+zlib (zlib License), libctru (zlib License), libpng (PNG Reference Library License version 2)
+  Linked into the binaries under their licences.
