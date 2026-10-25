@@ -132,9 +132,13 @@ void pressure_set_wanted(bool wanted)
 	}
 	if (wanted && !g_pressureOpen) {
 		g_pressureOpen = tp_open(NULL, 0);
-		if (!g_pressureOpen) {
-			// With Luma3DS, tp_open fails only when it gets no session of the touch chip's service.
+		if (!g_pressureOpen && tp_chip_unsupported()) {
+			app_toast("This touch chip can't sense pressure");
+		} else if (!g_pressureOpen) {
+			// With Luma3DS, tp_open fails otherwise only when it gets no session of the touch chip's service.
 			app_toast(luma_installed() ? "No pressure: touch chip busy" : "No pressure: needs Luma3DS");
+		}
+		if (!g_pressureOpen) {
 			wanted = false;
 		}
 	}
@@ -146,11 +150,15 @@ void pressure_set_wanted(bool wanted)
 	app_settings_changed();
 }
 
-// Unlike pressure_set_wanted, a failed open here keeps the wish, so the next start tries again.
+// Unlike pressure_set_wanted, a failed open here keeps the wish, so the next start tries again. A touch chip
+// without the pressure scan never will, so there the switch shows off.
 void pressure_open(void)
 {
 	if (g_pressureWanted && !running_in_emulator()) {
 		g_pressureOpen = tp_open(NULL, 0);
+		if (!g_pressureOpen && tp_chip_unsupported()) {
+			g_pressureWanted = false;
+		}
 	}
 }
 

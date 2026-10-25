@@ -14,7 +14,6 @@
 #include "ftp_control.h"
 #include "input.h"
 #include "mascot.h"
-#include "math_util.h"
 #include "page_view.h"
 #include "paths.h"
 #include "pen.h"
@@ -27,10 +26,6 @@
 
 #define SETTINGS_IDLE_MS 2000 // the settings are saved once the input has paused this long
 #define AUTOSAVE_IDLE_MS 30000 // unsaved work is saved once the input has paused this long
-
-// Only the framebuffers use linear memory. Left at 0, libctru keeps up to 32 MB of it, and an Old 3DS has
-// about 28 MB left for the layers.
-u32 __ctru_linear_heap_size = 8 * MEBIBYTE;
 
 static u64 g_lastInputTime;
 static u64 g_autosavedAfterInput; // the input time the last autosave followed

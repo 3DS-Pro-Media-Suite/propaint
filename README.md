@@ -25,7 +25,8 @@ For the Homebrew Launcher, copy `propaint.3dsx` to `sdmc:/3ds/`.
 
 - Up to 12 layers, with groups, clipping and blend modes.
 - Shape layers stay sharp at any zoom.
-- Stylus pressure on the New 3DS (needs Luma3DS).
+- Stylus pressure where the touch chip can sense it, as in the New 3DS (needs Luma3DS).
+  The Old 3DS touch chip has no pressure scan. Plain drawing works there.
 - Comes with Krita brushes. Imports `.kpp` and `.bundle` files.
 - Brush textures: paper, canvas and screentones from Krita, or your own PNG files.
 - Smudge brushes can paint as they smudge, like wet paint.
