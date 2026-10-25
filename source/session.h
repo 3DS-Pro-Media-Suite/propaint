@@ -18,6 +18,6 @@ bool session_ready_to_quit(void); // Save and exit: saves, false when the app mu
 bool session_quit_failed(void); // the save at Save and exit failed once: the next one quits anyway
 // drawingName: the drawing SESSION_JOB_OPEN opens, else NULL. toast may be NULL.
 void session_start_job(int job, const char *drawingName, const char *toast);
-void session_start_export(void); // exports in g_exportFormat as it is when the job runs
+void session_start_export(void); // exports in the Export page's format as it is when the job runs
 void session_tick(void); // once a frame: runs the waiting job when its delay is over
 int session_pending_job(void); // SESSION_JOB_NONE when there is none

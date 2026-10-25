@@ -1,15 +1,10 @@
 #include <stdbool.h>
 #include <stdlib.h>
 #include <string.h>
-#include <zlib.h>
 #include "kpp_file.h"
 #include "bytes.h"
+#include "inflate_buffer.h"
 #include "png_writer.h"
-
-// First output buffer guess for compressed text, whose inflated size is unknown; it doubles on each retry.
-#define INFLATE_GUESS_RATIO 4
-#define INFLATE_GUESS_EXTRA 1024
-#define INFLATE_MAX_ATTEMPTS 6
 
 #define ZTXT_METHOD_SIZE 1
 #define ITXT_FLAGS_SIZE 2 // compression flag and compression method
@@ -18,41 +13,11 @@
 #define PRESET_KEYWORD "preset"
 #define PRESET_KEYWORD_SIZE sizeof(PRESET_KEYWORD)
 
-// Inflates zlib data into a new NUL-terminated buffer.
+// Inflates zlib data, whose inflated size the chunk does not give, into a new NUL-terminated string.
 static char *inflate_to_string(const u8 *source, size_t sourceSize)
 {
-	size_t capacity = sourceSize * INFLATE_GUESS_RATIO + INFLATE_GUESS_EXTRA;
-	char *output = NULL;
-	for (int attempt = 0; attempt < INFLATE_MAX_ATTEMPTS; attempt++) {
-		free(output);
-		output = malloc(capacity);
-		if (!output) {
-			return NULL;
-		}
-		z_stream stream;
-		memset(&stream, 0, sizeof stream);
-		if (inflateInit2(&stream, MAX_WBITS) != Z_OK) {
-			break;
-		}
-		stream.next_in = (Bytef *)source;
-		stream.avail_in = (uInt)sourceSize;
-		stream.next_out = (Bytef *)output;
-		stream.avail_out = (uInt)(capacity - 1);
-		int result = inflate(&stream, Z_FINISH);
-		size_t outputSize = stream.total_out;
-		inflateEnd(&stream);
-		if (result == Z_STREAM_END) {
-			output[outputSize] = 0;
-			return output;
-		}
-		// Z_BUF_ERROR and Z_OK can mean the output buffer is too small.
-		if (result != Z_BUF_ERROR && result != Z_OK) {
-			break;
-		}
-		capacity *= 2;
-	}
-	free(output);
-	return NULL;
+	size_t length;
+	return (char *)inflate_buffer(source, sourceSize, INFLATE_ZLIB, INFLATE_SIZE_UNKNOWN, &length);
 }
 
 // A new NUL-terminated copy of the bytes from start to end.

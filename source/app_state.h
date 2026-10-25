@@ -31,7 +31,6 @@ extern bool g_mascotHidden;
 extern bool g_zoomButtonsShown; // the + / level / - buttons on the page (off: the pop-up palette zooms)
 extern bool g_penDown; // a stroke is running
 extern bool g_sampling; // the stylus is picking a colour
-extern bool g_settingsDirty; // a setting differs from the saved settings
 
 #define TOAST_PADDING 8 // around the toast's text
 
@@ -46,3 +45,5 @@ bool app_bottom_redraw_pending(void);
 void app_bottom_redraw_done(void); // one requested frame is composed
 void app_tick(void); // once a frame: counts the toast down
 void app_settings_changed(void); // the settings are saved once the input has paused
+bool app_settings_pending(void); // a setting differs from the saved settings
+void app_settings_saved(void);

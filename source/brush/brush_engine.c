@@ -42,6 +42,8 @@
 #define TIP_CENTRE_GRADIENT 1e-6f // below this the pixel is the tip's centre
 #define TIP_EDGE_MARGIN 2.0f // canvas px past the tip for its anti-aliased edge
 #define TIP_COVERED_SQUARED_MARGIN 1.01f // a pixel this far past the covered reach, squared, is left out
+#define TIP_SPAN_SLACK 1.01f // the row span holds a slightly larger ellipse than the per-pixel test
+#define TIP_SPAN_MARGIN 1 // px added on each side of a row span, for rounding
 #define CAPSULE_FIELD_MARGIN 12.0f // canvas px past a capsule where its distance field is written
 #define SHORT_FIELD_MARGIN 4.0f // canvas px: the anti-aliased edge and the default melt (shortField)
 #define CAPSULE_LENGTH_SQUARED_MIN 1e-6f // a shorter capsule is a circle
@@ -74,6 +76,7 @@ static u8 *g_strokeCoverage; // the stroke's coverage of the colour map so far, 
 static s8 *g_strokeShape; // SDF layers: the union of the stroke's dab shapes so far, SDF_FAR where none
 static float *g_dabPixels; // a direct dab's new premultiplied pixels, until they are written back
 static float *g_dabDistances; // a direct dab's new field values, or DIRECT_DAB_SKIPPED
+static u8 *g_colorPending; // 1: the coverage grew in this pen sample, the colour is still to write
 
 // The stroke in progress.
 static struct {
@@ -108,7 +111,8 @@ bool brush_engine_init(void)
 	g_strokeShape = malloc(CANVAS_PIXELS);
 	g_dabPixels = malloc(DIRECT_DAB_BOX_PIXELS * RGBA_CHANNELS * sizeof(float));
 	g_dabDistances = malloc(DIRECT_DAB_BOX_PIXELS * sizeof(float));
-	if (!g_strokeCoverage || !g_strokeShape || !g_dabPixels || !g_dabDistances) {
+	g_colorPending = calloc(CANVAS_PIXELS, 1);
+	if (!g_strokeCoverage || !g_strokeShape || !g_dabPixels || !g_dabDistances || !g_colorPending) {
 		return false;
 	}
 	memset(g_strokeShape, SDF_FAR, CANVAS_PIXELS);
@@ -710,6 +714,7 @@ typedef struct {
 	float onePixel; // one canvas px along the tip's short axis, in tip units
 	float edgeWidth; // the soft edge, in tip units
 	float edgeReach; // in tip units: the edge's half pixel of coverage ends here
+	float edgeCoverage; // the half pixel of coverage on the edge itself
 	float textureStrength;
 	float opacityCap;
 	float flow;
@@ -730,6 +735,7 @@ static void dab_tip_init(DabTip *tip, float dabX, float dabY, float radius, floa
 	tip->onePixel = 1.0f / min_float(tip->radiusX, tip->radiusY);
 	tip->edgeWidth = max_float(1 - brush->hardness * PERCENT_TO_UNIT, tip->onePixel);
 	tip->edgeReach = 1 + 0.5f * tip->onePixel;
+	tip->edgeCoverage = 0.5f * tip->onePixel / tip->edgeWidth;
 	tip->textureStrength = brush->textureStrength * PERCENT_TO_UNIT;
 	tip->opacityCap = opacityCap;
 	tip->flow = flow;
@@ -747,7 +753,7 @@ static inline void to_tip_units(const DabTip *tip, int x, int y, float *tipX, fl
 // The tip's coverage of a pixel, at most 1, with half a pixel of coverage on the edge itself. 0 or less: none.
 static inline float tip_coverage(const DabTip *tip, float tipDistance)
 {
-	float coverage = (1 - tipDistance) / tip->edgeWidth + 0.5f * tip->onePixel / tip->edgeWidth;
+	float coverage = (1 - tipDistance) / tip->edgeWidth + tip->edgeCoverage;
 	return min_float(coverage, 1);
 }
 
@@ -787,9 +793,53 @@ static inline void add_pixel(IRect *rect, int x, int y)
 	rect->y1 = y >= rect->y1 ? y + 1 : rect->y1;
 }
 
+// A round or elliptic tip, row by row: tipX * tipX + tipY * tipY as a quadratic in the pixel's offset from the
+// dab along the row.
+typedef struct {
+	float offsetSquared; // the factor of offsetX * offsetX
+	float offsetCross; // of offsetX * offsetY
+	float rowSquared; // of offsetY * offsetY
+	float limit; // the covered reach squared, with slack
+} TipRows;
+
+static void tip_rows_init(TipRows *rows, const DabTip *tip, float coveredSquared)
+{
+	float cosine = tip->cosAngle;
+	float sine = tip->sinAngle;
+	float inverseX = 1 / (tip->radiusX * tip->radiusX);
+	float inverseY = 1 / (tip->radiusY * tip->radiusY);
+	rows->offsetSquared = cosine * cosine * inverseX + sine * sine * inverseY;
+	rows->offsetCross = 2 * cosine * sine * (inverseX - inverseY);
+	rows->rowSquared = sine * sine * inverseX + cosine * cosine * inverseY;
+	rows->limit = coveredSquared * TIP_SPAN_SLACK;
+}
+
+// Narrows [*left, *right) to the columns of row y the tip can cover. The span is a little wider than exact, so
+// every pixel the per-pixel test takes is in it.
+static void tip_row_span(const TipRows *rows, const DabTip *tip, int y, int *left, int *right)
+{
+	float offsetY = y + 0.5f - tip->y;
+	float linear = rows->offsetCross * offsetY;
+	float constant = rows->rowSquared * offsetY * offsetY - rows->limit;
+	float discriminant = linear * linear - 4 * rows->offsetSquared * constant;
+	if (discriminant < 0) {
+		*right = *left;
+		return;
+	}
+	float root = sqrtf(discriminant);
+	float first = (-linear - root) / (2 * rows->offsetSquared);
+	float last = (-linear + root) / (2 * rows->offsetSquared);
+	// Pixel x sits at offset x + 0.5 - tip->x.
+	int spanLeft = (int)floorf(tip->x + first - 0.5f) - TIP_SPAN_MARGIN;
+	int spanRight = (int)ceilf(tip->x + last - 0.5f) + 1 + TIP_SPAN_MARGIN;
+	*left = max_int(*left, spanLeft);
+	*right = max_int(min_int(*right, spanRight), *left);
+}
+
 // A dab that builds only the stroke's coverage. Its box holds the turned tip and its edge, and it skips the
-// pixels it cannot change: those already at the opacity cap, and those outside a round tip. It returns only
-// the pixels it changed, so the screen redraws less behind a big brush.
+// pixels it cannot change: those already at the opacity cap, and those outside a round tip, whose rows it
+// cuts short. It returns only the pixels it changed, so the screen redraws less behind a big brush. Their
+// colour is written once the pen sample's dabs are done.
 static IRect paint_color_dab(const DabTip *tip, Layer *layer)
 {
 	IRect empty = {0, 0, 0, 0};
@@ -807,11 +857,18 @@ static IRect paint_color_dab(const DabTip *tip, Layer *layer)
 	// Past this squared distance a round tip covers nothing, so the square root can wait. The margin keeps
 	// rounding from dropping an edge pixel.
 	float coveredSquared = tip->edgeReach * tip->edgeReach * TIP_COVERED_SQUARED_MARGIN;
+	TipRows rows;
+	tip_rows_init(&rows, tip, coveredSquared);
 	IRect changed = empty;
 	for (int y = box.y0; y < box.y1; y++) {
+		int left = box.x0;
+		int right = box.x1;
+		if (!tip->isSquare) {
+			tip_row_span(&rows, tip, y, &left, &right);
+		}
 		TextureRow texture;
-		texture_row_start(&texture, box.x0, y);
-		for (int x = box.x0; x < box.x1; x++) {
+		texture_row_start(&texture, left, y);
+		for (int x = left; x < right; x++) {
 			float textureValue = tip->textureStrength > 0 ? texture_row_next(&texture, x) : 1;
 			size_t index = (size_t)y * CANVAS_WIDTH + x;
 			if (g_strokeCoverage[index] >= fullCoverage) {
@@ -833,7 +890,7 @@ static IRect paint_color_dab(const DabTip *tip, Layer *layer)
 			}
 			add_pixel(&changed, x, y);
 			if (writesColor) {
-				write_color_pixel(layer, x, y, index);
+				g_colorPending[index] = 1;
 			}
 		}
 	}
@@ -866,7 +923,7 @@ static IRect paint_shape_dab(const DabTip *tip, Layer *layer, float radius)
 			if (coverage > 0) {
 				coverage = textured(tip, coverage, textureValue);
 				if (add_coverage(index, coverage, tip->opacityCap, tip->flow) && writesColor) {
-					write_color_pixel(layer, x, y, index);
+					g_colorPending[index] = 1;
 				}
 			}
 			float edgeDistance = tip_edge_distance(tip->isSquare, tipX, tipY, tip->radiusX, tip->radiusY);
@@ -988,6 +1045,21 @@ static IRect draw_dab(float dabX, float dabY, float radius, float pressure, floa
 	return paint_dab(dabX, dabY, radius, angle, cappedOpacity, flow, buildsShape);
 }
 
+// Writes the colour of the pixels whose coverage grew in this pen sample, each once from its final coverage
+// however many dabs covered it. rect holds them all.
+static void write_pending_colors(Layer *layer, IRect rect)
+{
+	for (int y = rect.y0; y < rect.y1; y++) {
+		for (int x = rect.x0; x < rect.x1; x++) {
+			size_t index = (size_t)y * CANVAS_WIDTH + x;
+			if (g_colorPending[index]) {
+				g_colorPending[index] = 0;
+				write_color_pixel(layer, x, y, index);
+			}
+		}
+	}
+}
+
 // Adds the SDF capsule from the previous pen sample to this one.
 static void add_capsule(IRect *changed, float x, float y, float pressure, float speed, float length)
 {
@@ -1065,6 +1137,9 @@ IRect brush_stroke_add(float x, float y, float pressure, u32 timeMs)
 	}
 	lay_dabs_along_move(&changed, moveX, moveY, length, pressure, speed, isDirect,
 	                    paintsShape && !usesCapsule);
+	if (!isDirect) {
+		write_pending_colors(layer, changed);
+	}
 	if (usesCapsule) {
 		add_capsule(&changed, x, y, pressure, speed, length);
 	}

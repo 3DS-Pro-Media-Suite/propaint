@@ -51,7 +51,7 @@ static const char *const ACTION_LABELS[ACTION_COUNT] = {
         [ACTION_SAVE] = "Save",
 };
 
-const u32 g_buttonKeys[BUTTON_COUNT] = {
+static const u32 g_buttonKeys[BUTTON_COUNT] = {
         [BUTTON_UP] = KEY_DUP,       [BUTTON_DOWN] = KEY_DDOWN,    [BUTTON_LEFT] = KEY_DLEFT,
         [BUTTON_RIGHT] = KEY_DRIGHT, [BUTTON_A] = KEY_A,           [BUTTON_B] = KEY_B,
         [BUTTON_X] = KEY_X,          [BUTTON_Y] = KEY_Y,           [BUTTON_L] = KEY_L,
@@ -93,9 +93,29 @@ static const u8 LEFT_HANDED_DEFAULTS[BUTTON_COUNT] = {
         [BUTTON_START] = ACTION_MENU,   [BUTTON_SELECT] = ACTION_POPUP,
 };
 
-u8 g_buttonActions[BUTTON_COUNT];
+static u8 g_buttonActions[BUTTON_COUNT];
 
 static int g_pickedButton; // the button whose action the action picker sets
+
+u32 button_map_key(int button)
+{
+	return g_buttonKeys[button];
+}
+
+int button_map_action(int button)
+{
+	return g_buttonActions[button];
+}
+
+const u8 *button_map_actions(void)
+{
+	return g_buttonActions;
+}
+
+void button_map_restore(const u8 actions[BUTTON_COUNT])
+{
+	memcpy(g_buttonActions, actions, sizeof g_buttonActions);
+}
 
 void button_map_defaults(void)
 {

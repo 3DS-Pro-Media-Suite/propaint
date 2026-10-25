@@ -97,14 +97,14 @@ static void fill_record(SettingsRecord *record)
 	record->strokeSmoothing = (u8)g_strokeSmoothing;
 	record->leftHanded = g_leftHanded;
 	record->railHidden = g_railHidden;
-	record->recentColorCount = (u8)g_recentColorCount;
-	memcpy(record->recentColors, g_recentColors, sizeof record->recentColors);
+	record->recentColorCount = (u8)color_recent_count();
+	color_recent_copy(record->recentColors);
 	record->brushMode = (u8)g_brushMode;
 	record->smudgeStrength = (u8)g_smudgeStrength;
-	record->pressureWanted = g_pressureWanted;
+	record->pressureWanted = pressure_wanted();
 	record->mascotHidden = g_mascotHidden;
 	record->presetIndex = saved_preset_index(brush.presetIndex);
-	memcpy(record->buttonActions, g_buttonActions, sizeof record->buttonActions);
+	memcpy(record->buttonActions, button_map_actions(), sizeof record->buttonActions);
 	record->zoomButtonsShown = g_zoomButtonsShown;
 	record->eraserPresetIndex = saved_preset_index(eraser.presetIndex);
 	record->eraserRadius = (u8)eraser.radius;
@@ -118,7 +118,7 @@ void settings_mark_saved(void)
 
 bool settings_is_dirty(void)
 {
-	return g_settingsDirty || brush_library_is_dirty();
+	return app_settings_pending() || brush_library_is_dirty();
 }
 
 // Writes only a file whose bytes changed.
@@ -137,7 +137,7 @@ static void write_changed_files(void)
 	    safe_file_write(BRUSH_PATH, &header, sizeof header, brushes, sizeof brushes)) {
 		memcpy(g_brushesSaved, brushes, sizeof brushes);
 	}
-	g_settingsDirty = false;
+	app_settings_saved();
 }
 
 // Reads as much of the record as the file holds.
@@ -151,7 +151,9 @@ static void read_record(FILE *file, SettingsRecord *record)
 	if (fread(&size, sizeof size, 1, file) != 1 || size <= SETTINGS_HEADER_SIZE) {
 		return;
 	}
-	fseek(file, 0, SEEK_SET);
+	if (fseek(file, 0, SEEK_SET) != 0) {
+		return;
+	}
 	size_t readSize = size < sizeof *record ? size : sizeof *record;
 	u8 bytes[sizeof *record];
 	if (fread(bytes, 1, readSize, file) == readSize) {
@@ -190,8 +192,7 @@ static void apply_record(const SettingsRecord *record)
 	g_leftHanded = record->leftHanded;
 	g_railHidden = record->railHidden;
 	if (record->recentColorCount <= RECENT_COLORS_MAX) {
-		g_recentColorCount = record->recentColorCount;
-		memcpy(g_recentColors, record->recentColors, sizeof g_recentColors);
+		color_recent_restore(record->recentColors, record->recentColorCount);
 	}
 	color_set(record->color);
 	if (record->brushMode < BRUSH_MODE_COUNT) {
@@ -200,7 +201,7 @@ static void apply_record(const SettingsRecord *record)
 	if (record->smudgeStrength <= 100) {
 		g_smudgeStrength = record->smudgeStrength;
 	}
-	g_pressureWanted = record->pressureWanted;
+	pressure_restore_wanted(record->pressureWanted);
 	g_mascotHidden = record->mascotHidden;
 	g_zoomButtonsShown = record->zoomButtonsShown;
 	bool actionsValid = true;
@@ -208,7 +209,7 @@ static void apply_record(const SettingsRecord *record)
 		actionsValid &= record->buttonActions[i] < ACTION_COUNT;
 	}
 	if (actionsValid) {
-		memcpy(g_buttonActions, record->buttonActions, sizeof g_buttonActions);
+		button_map_restore(record->buttonActions);
 	}
 }
 

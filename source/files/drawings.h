@@ -18,14 +18,14 @@ typedef struct {
 	u8 *thumbnail; // DRAWING_THUMBNAIL_WIDTH * DRAWING_THUMBNAIL_HEIGHT * 3, or NULL when there is none yet
 } DrawingFile;
 
-extern DrawingFile g_drawings[DRAWINGS_MAX]; // newest first (after drawings_scan)
-extern int g_drawingCount;
+int drawings_count(void); // the drawings drawings_scan listed
+const DrawingFile *drawings_at(int index); // newest first
 extern char g_drawingName[DRAWING_NAME_MAX + 1]; // the drawing that is open
 
-// Makes the folders and sets g_drawingName to the drawing opened last.
+// Sets up the save guard, makes the folders and sets g_drawingName to the drawing opened last.
 void drawings_init(void);
 void drawings_scan(void);
-int drawings_find(const char *name); // index in g_drawings, -1 when missing
+int drawings_find(const char *name); // the index for drawings_at, -1 when missing
 bool drawings_exists(const char *name);
 // base, or "base 2", "base 3", ... that is not taken
 void drawings_unique_name(const char *base, char *out, size_t outSize);

@@ -2,9 +2,8 @@
 // the pressure settles, and the eyedropper sample.
 #pragma once
 
-extern int g_stylusX; // where the stylus is on the bottom screen
-extern int g_stylusY;
-
+int pen_stylus_x(void); // where the stylus is on the bottom screen
+int pen_stylus_y(void);
 void pen_down(int screenX, int screenY);
 void pen_move(int screenX, int screenY);
 void pen_up(void);

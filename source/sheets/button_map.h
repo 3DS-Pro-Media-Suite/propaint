@@ -51,9 +51,10 @@ enum {
 	BUTTON_COUNT
 };
 
-extern const u32 g_buttonKeys[BUTTON_COUNT]; // the libctru KEY_* bit of each button
-extern u8 g_buttonActions[BUTTON_COUNT]; // the action of each button
-
+u32 button_map_key(int button); // the libctru KEY_* bit of the button
+int button_map_action(int button);
+const u8 *button_map_actions(void); // the action of each button, BUTTON_COUNT bytes as the settings keep them
+void button_map_restore(const u8 actions[BUTTON_COUNT]); // the saved actions
 void button_map_defaults(void); // the free hand's buttons do the frequent things
 bool button_map_action_held(u32 heldKeys, int action);
 void button_map_sheet(int sheetLeft);

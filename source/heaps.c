@@ -2,11 +2,16 @@
 // what the heap area holds. libctru's own split gives the heap all but the linear heap, which on a New 3DS
 // is more than the heap area, and the app would not start.
 #include <3ds.h>
+#include <unistd.h>
+#include "heaps.h"
 #include "math_util.h"
 
 #define LINEAR_HEAP_MIN_SIZE (8 * MEBIBYTE)
 #define HEAP_AREA_SIZE (OS_HEAP_AREA_END - OS_HEAP_AREA_BEGIN)
 #define PAGE_MASK 0xFFF
+// Growing the heap for a block, malloc claims a little more: a chunk header and page rounding.
+#define MALLOC_GROWTH_MARGIN (64 * 1024)
+#define SBRK_FAILED ((char *)-1)
 
 // Set up by libctru and newlib, used again when the app exits.
 extern char *fake_heap_start;
@@ -53,4 +58,15 @@ void __system_allocateHeaps(void)
 	mappableInit(OS_MAP_AREA_BEGIN, OS_MAP_AREA_END);
 	fake_heap_start = (char *)__ctru_heap;
 	fake_heap_end = fake_heap_start + __ctru_heap_size;
+}
+
+// sbrk grows the heap up to fake_heap_end.
+bool heaps_unclaimed_fits(size_t size)
+{
+	char *claimedEnd = sbrk(0);
+	if (claimedEnd == SBRK_FAILED) {
+		return false;
+	}
+	size_t unclaimed = (size_t)(fake_heap_end - claimedEnd);
+	return unclaimed >= size && unclaimed - size >= MALLOC_GROWTH_MARGIN;
 }

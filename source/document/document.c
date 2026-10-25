@@ -4,6 +4,7 @@
 #include <zlib.h>
 #include "document.h"
 #include "layer_stack.h"
+#include "math_util.h"
 #include "safe_file.h"
 #include "undo.h"
 
@@ -361,6 +362,36 @@ static bool read_header(FILE *file, Document *loaded, u8 *layerCount, u8 *curren
 	return fread(loaded->groups, sizeof(Group), GROUP_SLOTS, file) == GROUP_SLOTS;
 }
 
+// A file from elsewhere can hold any bytes. An unknown blend mode becomes Normal, as the renderer draws it.
+static void repair_name_and_blend(char name[LAYER_NAME_SIZE], u8 *blend)
+{
+	name[LAYER_NAME_SIZE - 1] = '\0';
+	if (*blend >= BLEND_COUNT) {
+		*blend = BLEND_NORMAL;
+	}
+}
+
+static void repair_group_names_and_blends(Document *document)
+{
+	for (int groupId = 0; groupId < GROUP_SLOTS; groupId++) {
+		Group *group = &document->groups[groupId];
+		repair_name_and_blend(group->name, &group->blend);
+		group->opacity = min_int(group->opacity, OPACITY_MAX);
+	}
+}
+
+// Look values outside the look sheet's ranges are clamped to them.
+static void repair_layer_look(LayerProps *props)
+{
+	props->opacity = min_int(props->opacity, OPACITY_MAX);
+	props->softness = min_int(props->softness, SOFTNESS_MAX);
+	props->meltRadius = min_int(props->meltRadius, MELT_RADIUS_MAX);
+	props->outlineWidth = min_int(props->outlineWidth, OUTLINE_WIDTH_MAX);
+	props->shadowBlur = min_int(props->shadowBlur, SHADOW_BLUR_MAX);
+	props->shadowX = clamp_int(props->shadowX, -SHADOW_OFFSET_MAX, SHADOW_OFFSET_MAX);
+	props->shadowY = clamp_int(props->shadowY, -SHADOW_OFFSET_MAX, SHADOW_OFFSET_MAX);
+}
+
 static bool read_layer(FILE *file, Layer *layer)
 {
 	if (fread(&layer->props, sizeof layer->props, 1, file) != 1) {
@@ -369,6 +400,8 @@ static bool read_layer(FILE *file, Layer *layer)
 	if (layer->props.type > LAYER_SDF) {
 		return false;
 	}
+	repair_name_and_blend(layer->props.name, &layer->props.blend);
+	repair_layer_look(&layer->props);
 	if (!layer_alloc(layer, layer->props.type)) {
 		return false;
 	}
@@ -445,6 +478,7 @@ bool document_load(const char *path)
 		}
 		return false;
 	}
+	repair_group_names_and_blends(&loaded);
 	repair_groups(&loaded, layerCount);
 	free_document_layers();
 	g_document = loaded;

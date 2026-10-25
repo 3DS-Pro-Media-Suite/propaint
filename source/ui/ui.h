@@ -47,9 +47,8 @@ enum {
 	SHEET_COUNT
 };
 
-extern int g_openSheet;
-extern bool g_popupOpen; // the pop-up palette is open
-
+int ui_current_sheet(void); // the open sheet, SHEET_NONE when there is none
+bool ui_popup_is_open(void); // the pop-up palette is open
 void ui_open_sheet(int sheet);
 int ui_root_sheet(int sheet); // the sheet whose rail button opens this one
 // Opens the sheet, or closes it when it or a sheet reached from it is open.

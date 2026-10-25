@@ -529,7 +529,7 @@ static void settings_stroke_tab(int leftColumn, int rightColumn, int y, bool era
 static void settings_pressure_tab(int leftColumn, int rightColumn, int y)
 {
 	widget_label_row(leftColumn, y, 0, "Pressure pen", NULL, true);
-	int penShown = g_pressureWanted ? 1 : 0;
+	int penShown = pressure_wanted() ? 1 : 0;
 	int penPicked = widget_segmented(leftColumn, y + LABELED_CONTROL_Y, SHEET_COLUMN_WIDTH, SEGMENTED_HEIGHT,
 	                                 WIDGET_OFF_ON_LABELS, WIDGET_OFF_ON_COUNT, penShown, true);
 	if (penPicked != penShown) {

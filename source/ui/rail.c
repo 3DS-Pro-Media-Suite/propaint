@@ -126,7 +126,7 @@ static void tool_button(int x, int y, int tool, int icon)
 		return;
 	}
 	tool_select(tool);
-	if (g_openSheet) {
+	if (ui_current_sheet()) {
 		ui_open_sheet(SHEET_NONE);
 	}
 	toast_tool();
@@ -175,18 +175,19 @@ static void size_slider(int railX)
 static void color_swatches(int railX)
 {
 	int swatchX = railX + SWATCH_X;
-	if (widget_swatch(swatchX, SWATCH_Y, SWATCH_WIDTH, SWATCH_HEIGHT, g_color, g_openSheet == SHEET_COLOR)) {
+	if (widget_swatch(swatchX, SWATCH_Y, SWATCH_WIDTH, SWATCH_HEIGHT, g_color,
+	                  ui_current_sheet() == SHEET_COLOR)) {
 		ui_toggle_sheet(SHEET_COLOR);
 	}
 	int shown = 0;
-	for (int i = 0; i < g_recentColorCount && shown < RECENT_SWATCHES_SHOWN; i++) {
-		if (!memcmp(g_recentColors[i], g_color, sizeof g_color)) {
+	for (int i = 0; i < color_recent_count() && shown < RECENT_SWATCHES_SHOWN; i++) {
+		if (!memcmp(color_recent(i), g_color, sizeof g_color)) {
 			continue;
 		}
 		int recentX = swatchX + shown * RECENT_SWATCH_STEP;
-		if (widget_swatch(recentX, RECENT_SWATCH_Y, RECENT_SWATCH_SIZE, RECENT_SWATCH_SIZE, g_recentColors[i],
+		if (widget_swatch(recentX, RECENT_SWATCH_Y, RECENT_SWATCH_SIZE, RECENT_SWATCH_SIZE, color_recent(i),
 		                  false)) {
-			color_set(g_recentColors[i]);
+			color_set(color_recent(i));
 		}
 		shown++;
 	}
@@ -204,12 +205,12 @@ static void bottom_buttons(int railX)
 	if (widget_button(rightX, UNDO_Y, TOOL_BUTTON_WIDTH, UNDO_HEIGHT, IC_REDO, NULL, redoStyle)) {
 		history_redo();
 	}
-	bool layersOpen = ui_root_sheet(g_openSheet) == SHEET_LAYERS;
+	bool layersOpen = ui_root_sheet(ui_current_sheet()) == SHEET_LAYERS;
 	if (widget_button(leftX, BOTTOM_ROW_Y, TOOL_BUTTON_WIDTH, BOTTOM_BUTTON_HEIGHT, IC_LAYERS, NULL,
 	                  button_style(layersOpen))) {
 		ui_toggle_sheet(SHEET_LAYERS);
 	}
-	bool menuOpen = ui_root_sheet(g_openSheet) == SHEET_MENU;
+	bool menuOpen = ui_root_sheet(ui_current_sheet()) == SHEET_MENU;
 	if (widget_button(rightX, BOTTOM_ROW_Y, TOOL_BUTTON_WIDTH, BOTTOM_BUTTON_HEIGHT, IC_MENU, NULL,
 	                  button_style(menuOpen))) {
 		ui_toggle_sheet(SHEET_MENU);

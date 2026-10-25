@@ -111,10 +111,11 @@ static void run_save_job(void)
 static void run_export_job(void)
 {
 	char exportPath[EXPORT_PATH_MAX];
-	bool ok = g_exportFormat == EXPORT_ORA ? export_ora(g_drawingName, exportPath, sizeof exportPath)
-	                                       : export_png(g_drawingName, exportPath, sizeof exportPath);
+	int format = drawings_sheet_export_format();
+	bool ok = format == EXPORT_ORA ? export_ora(g_drawingName, exportPath, sizeof exportPath)
+	                               : export_png(g_drawingName, exportPath, sizeof exportPath);
 	char extension[EXTENSION_TEXT_SIZE];
-	snprintf(extension, sizeof extension, " as .%s", export_file_extension(g_exportFormat));
+	snprintf(extension, sizeof extension, " as .%s", export_file_extension(format));
 	app_toast_name(ok ? "Exported " : "Export failed: ", g_drawingName, ok ? extension : "");
 	mascot_event(ok ? MASCOT_EXPORTED : MASCOT_FAILED);
 }

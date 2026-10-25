@@ -27,15 +27,20 @@
 #define CIRCLE_PAD_DEAD_ZONE 22
 #define CIRCLE_PAD_PAN_SPEED 0.06f // screen px per frame for each unit the pad is pushed
 
-bool g_panning;
+static bool g_panning;
 static int g_panLastX; // the stylus position the pan has followed so far
 static int g_panLastY;
 static u64 g_panOrEraserPressTime;
 static bool g_panOrEraserUsedToPan;
 
+bool input_panning(void)
+{
+	return g_panning;
+}
+
 static bool sheet_or_popup_open(void)
 {
-	return g_openSheet || g_popupOpen;
+	return ui_current_sheet() || ui_popup_is_open();
 }
 
 static void start_page_touch(int screenX, int screenY, bool panHeld, bool eyedropperHeld)
@@ -204,8 +209,8 @@ static void release_pan_or_eraser(u64 now)
 static void handle_buttons(u32 pressedKeys, u32 releasedKeys, u64 now)
 {
 	for (int button = 0; button < BUTTON_COUNT; button++) {
-		u32 key = g_buttonKeys[button];
-		int action = g_buttonActions[button];
+		u32 key = button_map_key(button);
+		int action = button_map_action(button);
 		if (pressedKeys & key) {
 			if (sheet_or_popup_open()) {
 				press_button_over_ui(key, action);

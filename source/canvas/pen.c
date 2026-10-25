@@ -25,8 +25,8 @@ typedef struct {
 // How far each new point moves toward the stylus, per stroke smoothing level.
 static const float SMOOTHING_FOLLOW[STROKE_SMOOTHING_LEVELS] = {1.0f, 0.6f, 0.3f};
 
-int g_stylusX;
-int g_stylusY;
+static int g_stylusX;
+static int g_stylusY;
 
 static float g_lastCanvasX; // the stroke's last point, after smoothing
 static float g_lastCanvasY;
@@ -91,7 +91,7 @@ void pen_down(int screenX, int screenY)
 	        .brush = g_brush,
 	        .texture = textures_tile(g_brush.texture),
 	        .size = (float)g_brushRadius,
-	        .zoom = g_view.zoom,
+	        .zoom = page_view_current()->zoom,
 	};
 	if (!brush.brush.spacing) {
 		brush.brush.spacing = DEFAULT_DAB_SPACING;
@@ -181,4 +181,14 @@ void pen_pick_color(int screenX, int screenY)
 	color_set_keep_tool(rgb);
 	g_stylusX = screenX;
 	g_stylusY = screenY;
+}
+
+int pen_stylus_x(void)
+{
+	return g_stylusX;
+}
+
+int pen_stylus_y(void)
+{
+	return g_stylusY;
 }

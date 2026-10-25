@@ -6,6 +6,7 @@
 #include "ftp.h"
 #include "mascot.h"
 #include "paths.h"
+#include "save_guard.h"
 
 #define FTP_PORT 5421
 #define FTP_WIFI_WAIT_MS 30000 // after a sleep or Wi-Fi loss, how long the server may wait for the network
@@ -17,7 +18,7 @@ static const FtpConfig FTP_CONFIG = {
         .port = FTP_PORT,
         .removeFolderContents = true,
         .canDelete = NULL,
-        .isBusy = NULL,
+        .isBusy = save_guard_busy, // a drawing or an export may be in the middle of a save
 };
 
 static u64 g_ftpOfflineSince; // when the running server lost its network; 0 while it has one

@@ -41,12 +41,7 @@
 #define RECOLOR_BUTTON_HEIGHT 20
 #define COLOR_CHIP_HEIGHT 14
 #define COLOR_CHIP_FRAME 1
-#define SOFTNESS_MAX 16 // half pixels
 #define SOFTNESS_TO_PIXELS 0.5f
-#define MELT_RADIUS_MAX 8
-#define OUTLINE_WIDTH_MAX 12
-#define SHADOW_OFFSET_MAX 12
-#define SHADOW_BLUR_MAX 8
 
 #define BLEND_NAME_COUNT BLEND_COUNT
 #define GROUP_VISIBILITY_COUNT 2
@@ -102,8 +97,8 @@ static void group_look_controls(int sheetLeft, Group *group)
 	int rightX = sheetLeft + SHEET_RIGHT_COLUMN_X;
 	int y = GROUP_CONTROLS_Y;
 	int opacity = group->opacity;
-	if (widget_slider(WIDGET_GROUP_OPACITY, leftX, y, SHEET_COLUMN_WIDTH, &opacity, 0, 100, true, "Opacity",
-	                  draw_format("%d%%", group->opacity))) {
+	if (widget_slider(WIDGET_GROUP_OPACITY, leftX, y, SHEET_COLUMN_WIDTH, &opacity, 0, OPACITY_MAX, true,
+	                  "Opacity", draw_format("%d%%", group->opacity))) {
 		group->opacity = opacity;
 		page_view_look_changed(false);
 	}
@@ -313,8 +308,8 @@ static void shadow_controls(Layer *layer, int leftX, int rightX, int y)
 		page_view_look_changed(true);
 	}
 	int shadowPercent = layer->props.shadowAlpha * 100 / 255;
-	if (look_slider(WIDGET_LAYER_SHADOW_OPACITY, rightX, y, &shadowPercent, 0, 100, shadowOn, "Shadow",
-	                draw_format("%d%%", shadowPercent))) {
+	if (look_slider(WIDGET_LAYER_SHADOW_OPACITY, rightX, y, &shadowPercent, 0, OPACITY_MAX, shadowOn,
+	                "Shadow", draw_format("%d%%", shadowPercent))) {
 		layer->props.shadowAlpha = shadowPercent * 255 / 100;
 		page_view_look_changed(true);
 	}
@@ -351,14 +346,14 @@ void layer_look_sheet_layer(int sheetLeft)
 	int rightX = sheetLeft + SHEET_RIGHT_COLUMN_X;
 	int y = LOOK_CONTROLS_Y;
 	int opacity = layer->props.opacity;
-	if (look_slider(WIDGET_LAYER_OPACITY, leftX, y, &opacity, 0, 100, true, "Opacity",
+	if (look_slider(WIDGET_LAYER_OPACITY, leftX, y, &opacity, 0, OPACITY_MAX, true, "Opacity",
 	                draw_format("%d%%", layer->props.opacity))) {
 		layer->props.opacity = opacity;
 		page_view_look_changed(false);
 	}
 	widget_label_row(rightX, y, SHEET_COLUMN_WIDTH, "Blend", NULL, true);
 	if (widget_button(rightX, y + CONTROL_LABEL_HEIGHT, SHEET_COLUMN_WIDTH, SMALL_BUTTON_HEIGHT,
-	                  WIDGET_NO_ICON, BLEND_NAMES[layer->props.blend], BUTTON_STYLE_NORMAL)) {
+	                  WIDGET_NO_ICON, BLEND_NAMES[layer->props.blend % BLEND_COUNT], BUTTON_STYLE_NORMAL)) {
 		layer->props.blend = (layer->props.blend + 1) % BLEND_COUNT;
 		page_view_look_changed(false);
 	}

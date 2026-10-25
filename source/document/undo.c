@@ -2,6 +2,7 @@
 #include <string.h>
 #include "undo.h"
 #include "document.h"
+#include "heaps.h"
 #include "math_util.h"
 
 #define UNDO_STEPS_MAX 64
@@ -266,6 +267,10 @@ void undo_push(UndoStep *step)
 	push_step(g_undoSteps, &g_undoCount, step);
 	while (g_undoBytes > UNDO_MEMORY_CAP && g_undoCount > 1) {
 		release_undo_memory();
+	}
+	// Mostly the heap still has the room unclaimed, and then no test block is needed.
+	if (heaps_unclaimed_fits(UNDO_FREE_ROOM)) {
+		return;
 	}
 	void *room;
 	while (!(room = malloc(UNDO_FREE_ROOM)) && g_undoCount > 1) {

@@ -18,6 +18,7 @@
 #include "png_writer.h"
 #include "render.h"
 #include "safe_file.h"
+#include "save_guard.h"
 #include "zip_writer.h"
 
 #define OPACITY_FULL 100 // percent
@@ -102,7 +103,9 @@ bool export_png(const char *name, char *path, size_t pathSize)
 	u8 *rgb = render_flattened(CANVAS_WIDTH, CANVAS_HEIGHT);
 	size_t pngSize = 0;
 	u8 *png = rgb ? png_encode(rgb, CANVAS_WIDTH, CANVAS_HEIGHT, &pngSize) : NULL;
+	save_guard_begin(path);
 	bool ok = png && safe_file_write(path, png, pngSize, NULL, 0);
+	save_guard_end();
 	free(rgb);
 	free(png);
 	return ok;
@@ -421,9 +424,8 @@ static void ora_add_flattened_images(Zip *zip)
 }
 
 // Written through a temporary file, so a failed export keeps the old file.
-bool export_ora(const char *name, char *path, size_t pathSize)
+static bool write_ora(const char *path)
 {
-	make_export_path(name, EXPORT_ORA, path, pathSize);
 	char tempPath[SAFE_FILE_PATH_SIZE];
 	safe_file_temp_path(path, tempPath);
 	TextBuffer stackXml = {0};
@@ -441,4 +443,13 @@ bool export_ora(const char *name, char *path, size_t pathSize)
 	ora_add_flattened_images(&zip);
 	bool written = zip_close(&zip);
 	return safe_file_commit_or_delete(tempPath, path, written);
+}
+
+bool export_ora(const char *name, char *path, size_t pathSize)
+{
+	make_export_path(name, EXPORT_ORA, path, pathSize);
+	save_guard_begin(path);
+	bool ok = write_ora(path);
+	save_guard_end();
+	return ok;
 }

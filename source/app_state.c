@@ -33,7 +33,8 @@ bool g_mascotHidden;
 bool g_zoomButtonsShown;
 bool g_sampling;
 bool g_penDown;
-bool g_settingsDirty;
+
+static bool g_settingsDirty;
 
 static char g_toastText[TOAST_TEXT_SIZE];
 static int g_toastFrames; // frames the toast stays
@@ -105,4 +106,14 @@ void app_tick(void)
 void app_settings_changed(void)
 {
 	g_settingsDirty = true;
+}
+
+bool app_settings_pending(void)
+{
+	return g_settingsDirty;
+}
+
+void app_settings_saved(void)
+{
+	g_settingsDirty = false;
 }

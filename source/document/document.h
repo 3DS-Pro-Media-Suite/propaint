@@ -15,11 +15,18 @@
 #define MAX_LAYERS 12
 #define MAX_GROUPS 8 // group ids are 1..MAX_GROUPS (0 = not in a group)
 #define SDF_UNITS_PER_PIXEL 8.0f // field units per canvas pixel
-#define SDF_FAR 127 // "no edge nearby"
+#define SDF_FAR 127 // "no edge nearby", and the largest distance an s8 field value holds
 #define RGBA_PIXEL_BYTES 4 // layer pixels are RGBA8
 #define RGBA_ALPHA_OFFSET 3 // the alpha byte of an RGBA8 pixel
 #define LAYER_NAME_SIZE 16 // a layer's or a group's name with its terminating zero
 #define INK_COLOR_DEFAULT {24, 26, 52} // the colour a fresh start paints with
+// The ranges of a layer's and a group's look. A loaded file is clamped to them.
+#define OPACITY_MAX 100 // percent
+#define SOFTNESS_MAX 16 // half pixels
+#define MELT_RADIUS_MAX 8
+#define OUTLINE_WIDTH_MAX 12
+#define SHADOW_OFFSET_MAX 12
+#define SHADOW_BLUR_MAX 8
 
 enum {
 	LAYER_PIXEL,

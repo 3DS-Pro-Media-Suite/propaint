@@ -40,10 +40,15 @@ static void create_directories(void)
 	mkdir(TEXTURES_DIR, FOLDER_MODE);
 }
 
-// HOME, an applet or sleep: the touch report goes back to the system and the settings are saved.
+// HOME, an applet or sleep: the touch report goes back to the system and the settings are saved. Back from
+// them, both screens are composed again.
 static void handle_apt_event(APT_HookType type, void *unused)
 {
 	(void)unused;
+	if (type == APTHOOK_ONRESTORE || type == APTHOOK_ONWAKEUP) {
+		screens_forget_pictures();
+		return;
+	}
 	if (type != APTHOOK_ONSUSPEND && type != APTHOOK_ONSLEEP) {
 		return;
 	}

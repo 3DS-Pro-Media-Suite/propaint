@@ -69,20 +69,18 @@ static void picker_input(int squareX, int hueBarX)
 		return;
 	}
 	if (widget_captured(WIDGET_COLOR_SQUARE)) {
-		g_pickerSaturation = clamp_unit((g_touch.x - squareX) / (float)(SQUARE_SIZE - 1));
-		g_pickerValue = 1 - clamp_unit((g_touch.y - PICKER_TOP) / (float)(SQUARE_SIZE - 1));
+		float saturation = clamp_unit((g_touch.x - squareX) / (float)(SQUARE_SIZE - 1));
+		float value = 1 - clamp_unit((g_touch.y - PICKER_TOP) / (float)(SQUARE_SIZE - 1));
+		color_pick_shade(saturation, value);
 	} else if (widget_captured(WIDGET_HUE_BAR)) {
-		g_pickerHue = hue_at_row(g_touch.y - PICKER_TOP);
-	} else {
-		return;
+		color_pick_hue(hue_at_row(g_touch.y - PICKER_TOP));
 	}
-	color_set_from_picker();
 }
 
 static void draw_picker(int squareX, int hueBarX)
 {
 	u8 pureHue[3];
-	color_hsv_to_rgb(g_pickerHue, 1, 1, pureHue);
+	color_hsv_to_rgb(color_picker_hue(), 1, 1, pureHue);
 	for (int x = 0; x < SQUARE_SIZE; x++) {
 		float saturation = x / (float)(SQUARE_SIZE - 1);
 		for (int y = 0; y < SQUARE_SIZE; y++) {
@@ -99,11 +97,11 @@ static void draw_picker(int squareX, int hueBarX)
 		color_hsv_to_rgb(y / (float)SQUARE_SIZE * HUE_BAR_MAX, 1, 1, rgb);
 		draw_fill(g_uiSurface, hueBarX, PICKER_TOP + y, HUE_BAR_WIDTH, 1, draw_color(rgb), 255);
 	}
-	float knobX = squareX + g_pickerSaturation * (SQUARE_SIZE - 1);
-	float knobY = PICKER_TOP + (1 - g_pickerValue) * (SQUARE_SIZE - 1);
+	float knobX = squareX + color_picker_saturation() * (SQUARE_SIZE - 1);
+	float knobY = PICKER_TOP + (1 - color_picker_value()) * (SQUARE_SIZE - 1);
 	draw_ring(g_uiSurface, knobX, knobY, KNOB_OUTER_RADIUS, COLOR_BLACK, 255);
 	draw_ring(g_uiSurface, knobX, knobY, KNOB_INNER_RADIUS, COLOR_WHITE, 255);
-	int markerY = PICKER_TOP + (int)(g_pickerHue / HUE_BAR_MAX * (SQUARE_SIZE - 1));
+	int markerY = PICKER_TOP + (int)(color_picker_hue() / HUE_BAR_MAX * (SQUARE_SIZE - 1));
 	int whiteInset = MARKER_OUTLINE;
 	int blackInset = 2 * MARKER_OUTLINE;
 	draw_frame(g_uiSurface, hueBarX - blackInset, markerY - blackInset, HUE_BAR_WIDTH + 2 * blackInset,
@@ -153,11 +151,11 @@ static void recent_swatches(int sheetLeft)
 {
 	int left = sheetLeft + SHEET_LEFT_COLUMN_X;
 	widget_label_row(left, RECENT_LABEL_Y, SHEET_CONTENT_WIDTH, "Recent", NULL, true);
-	for (int i = 0; i < g_recentColorCount; i++) {
-		bool selected = memcmp(g_recentColors[i], g_color, sizeof g_color) == 0;
-		if (widget_swatch(left + i * RECENT_STEP, RECENT_TOP, SWATCH_SIZE, SWATCH_SIZE, g_recentColors[i],
+	for (int i = 0; i < color_recent_count(); i++) {
+		bool selected = memcmp(color_recent(i), g_color, sizeof g_color) == 0;
+		if (widget_swatch(left + i * RECENT_STEP, RECENT_TOP, SWATCH_SIZE, SWATCH_SIZE, color_recent(i),
 		                  selected)) {
-			color_set(g_recentColors[i]);
+			color_set(color_recent(i));
 		}
 	}
 }

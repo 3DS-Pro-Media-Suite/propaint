@@ -33,10 +33,10 @@
 #define QUARTER_TURN (TWO_PI / 4)
 #define ROTATION_SNAP 0.07f // radians from a quarter turn that snap to it
 
-const float g_zoomSteps[ZOOM_STEP_COUNT] = {0, 0.5f, 0.75f, 1, 1.5f, 2, 3, 4, 6, 8, 12, 16};
+static const float g_zoomSteps[ZOOM_STEP_COUNT] = {0, 0.5f, 0.75f, 1, 1.5f, 2, 3, 4, 6, 8, 12, 16};
 
-View g_view = {.centerX = PAGE_CENTER_X, .centerY = PAGE_CENTER_Y, .zoom = START_ZOOM};
-int g_zoomStep = ZOOM_STEP_FIT;
+static View g_view = {.centerX = PAGE_CENTER_X, .centerY = PAGE_CENTER_Y, .zoom = START_ZOOM};
+static int g_zoomStep = ZOOM_STEP_FIT;
 static int g_zoomStepBeforeFit = ZOOM_STEP_ONE; // where toggling fit off returns to
 
 static u8 *g_bottomImage; // the rendered view
@@ -152,6 +152,16 @@ float page_view_zoom_of_step(int step)
 	float widthFit = (page_view_right() - page_view_left()) / (float)CANVAS_WIDTH;
 	float heightFit = (float)SCREEN_HEIGHT / CANVAS_HEIGHT;
 	return widthFit < heightFit ? widthFit : heightFit;
+}
+
+const View *page_view_current(void)
+{
+	return &g_view;
+}
+
+int page_view_zoom_step(void)
+{
+	return g_zoomStep;
 }
 
 static void clamp_view(void)
@@ -351,7 +361,7 @@ static void render_top_pending(void)
 void page_view_render_pending(void)
 {
 	// A sheet covers the page: the bottom screen's renders wait until it closes.
-	if (!g_openSheet) {
+	if (!ui_current_sheet()) {
 		render_bottom_pending();
 	}
 	// The top screen and the thumbnails wait for the stroke to end.

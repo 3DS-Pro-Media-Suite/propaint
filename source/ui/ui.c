@@ -51,9 +51,18 @@ static const SheetLinks SHEET_LINKS[SHEET_COUNT] = {
         [SHEET_EXPORT] = {SHEET_NONE, SHEET_MENU},
 };
 
-bool g_popupOpen;
+static bool g_popupOpen;
+static int g_openSheet;
 
-int g_openSheet;
+int ui_current_sheet(void)
+{
+	return g_openSheet;
+}
+
+bool ui_popup_is_open(void)
+{
+	return g_popupOpen;
+}
 
 // Leaving one of these sheets writes the settings.
 static bool sheet_changes_settings(int sheet)
@@ -149,7 +158,7 @@ static void run_zoom_buttons(void)
 	}
 	int buttonX = x + ZOOM_PILL_INSET;
 	int buttonY = y + ZOOM_PILL_INSET;
-	int zoomInStyle = g_zoomStep < ZOOM_STEP_COUNT - 1 ? BUTTON_STYLE_FLAT : BUTTON_STYLE_DIM;
+	int zoomInStyle = page_view_zoom_step() < ZOOM_STEP_COUNT - 1 ? BUTTON_STYLE_FLAT : BUTTON_STYLE_DIM;
 	if (zoom_button(buttonX, buttonY, "+", zoomInStyle)) {
 		page_view_step_zoom(1);
 		widget_capture(WIDGET_ZOOM_BUTTON);
@@ -157,12 +166,13 @@ static void run_zoom_buttons(void)
 		heldDirection = 1;
 	}
 	// Below 1 the "x" is left off, as "0.44x" is wider than the button.
-	const char *levelFormat = g_view.zoom < 1 ? "%.2g" : "%.2gx";
-	const char *levelLabel = g_zoomStep != ZOOM_STEP_FIT ? draw_format(levelFormat, g_view.zoom) : "fit";
+	float zoom = page_view_current()->zoom;
+	const char *levelFormat = zoom < 1 ? "%.2g" : "%.2gx";
+	const char *levelLabel = page_view_zoom_step() != ZOOM_STEP_FIT ? draw_format(levelFormat, zoom) : "fit";
 	if (zoom_button(buttonX, buttonY + ZOOM_BUTTON_STEP, levelLabel, BUTTON_STYLE_FLAT)) {
 		page_view_toggle_fit();
 	}
-	int zoomOutStyle = g_zoomStep > ZOOM_STEP_FIT ? BUTTON_STYLE_FLAT : BUTTON_STYLE_DIM;
+	int zoomOutStyle = page_view_zoom_step() > ZOOM_STEP_FIT ? BUTTON_STYLE_FLAT : BUTTON_STYLE_DIM;
 	if (zoom_button(buttonX, buttonY + 2 * ZOOM_BUTTON_STEP, "-", zoomOutStyle)) {
 		page_view_step_zoom(-1);
 		widget_capture(WIDGET_ZOOM_BUTTON);

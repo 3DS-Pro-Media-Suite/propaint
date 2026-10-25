@@ -55,10 +55,15 @@ static const char *const EXPORT_DESCRIPTIONS[EXPORT_FORMAT_COUNT][DESCRIPTION_LI
                         TO_STRING(CANVAS_WIDTH) " x " TO_STRING(CANVAS_HEIGHT) ".", ""},
 };
 
-int g_exportFormat = EXPORT_ORA;
+static int g_exportFormat = EXPORT_ORA;
 
 static char g_selectedName[DRAWING_NAME_MAX + 1]; // the selected drawing on the Drawings page
 static ScrollList g_fileScroll;
+
+int drawings_sheet_export_format(void)
+{
+	return g_exportFormat;
+}
 
 void drawings_sheet_open(void)
 {
@@ -109,7 +114,7 @@ static void draw_card(const DrawingFile *file, int x, int y, bool selected, bool
 // Returns true when the page is done for this frame (it closed or a job started).
 static bool drawing_card(int index, int x, int y)
 {
-	DrawingFile *file = &g_drawings[index];
+	const DrawingFile *file = drawings_at(index);
 	bool selected = strcmp(file->name, g_selectedName) == 0;
 	bool isOpen = strcmp(file->name, g_drawingName) == 0;
 	if (g_uiSurface) {
@@ -185,13 +190,13 @@ static void delete_selected(bool selectedIsOpen)
 	if (selectedIsOpen) {
 		g_unsaved = false;
 		g_stateDirty = false;
-		if (g_drawingCount) {
-			session_start_job(SESSION_JOB_OPEN, g_drawings[0].name, "Opening...");
+		if (drawings_count()) {
+			session_start_job(SESSION_JOB_OPEN, drawings_at(0)->name, "Opening...");
 		} else {
 			session_start_job(SESSION_JOB_NEW, NULL, "New drawing...");
 		}
 	}
-	const char *newest = g_drawingCount ? g_drawings[0].name : "";
+	const char *newest = drawings_count() ? drawings_at(0)->name : "";
 	snprintf(g_selectedName, sizeof g_selectedName, "%s", newest);
 }
 
@@ -212,7 +217,7 @@ static void drawings_bar(int sheetLeft)
 	}
 	if (widget_button(barLeft + SHEET_BAR_BUTTON_STEP, SHEET_BAR_Y, SHEET_BAR_BUTTON_WIDTH, SHEET_BAR_HEIGHT,
 	                  IC_DUPLICATE, "Copy",
-	                  widget_enabled_style(hasSelection && g_drawingCount < DRAWINGS_MAX))) {
+	                  widget_enabled_style(hasSelection && drawings_count() < DRAWINGS_MAX))) {
 		copy_selected(selectedIsOpen);
 	}
 	if (widget_button(barLeft + 2 * SHEET_BAR_BUTTON_STEP, SHEET_BAR_Y, SHEET_BAR_BUTTON_WIDTH,
@@ -236,12 +241,12 @@ void drawings_sheet_files(int sheetLeft)
 		session_start_job(SESSION_JOB_NEW, NULL, "Saving...");
 		return;
 	}
-	int rowCount = (g_drawingCount + CARD_COLUMNS - 1) / CARD_COLUMNS;
+	int rowCount = (drawings_count() + CARD_COLUMNS - 1) / CARD_COLUMNS;
 	int contentHeight = rowCount * CARD_ROW_HEIGHT;
 	widget_scroll_input(&g_fileScroll, WIDGET_DRAWING_LIST, sheetLeft, SHEET_LIST_TOP, SHEET_WIDTH,
 	                    LIST_HEIGHT, contentHeight);
 	draw_set_clip(SHEET_LIST_TOP, SHEET_LIST_BOTTOM);
-	for (int i = 0; i < g_drawingCount; i++) {
+	for (int i = 0; i < drawings_count(); i++) {
 		int column = i % CARD_COLUMNS;
 		int row = i / CARD_COLUMNS;
 		int x = sheetLeft + CARDS_X + column * (CARD_WIDTH + CARD_GAP);
@@ -256,7 +261,7 @@ void drawings_sheet_files(int sheetLeft)
 	}
 	draw_reset_clip();
 	// While the list job is waiting the list is not known yet.
-	if (g_uiSurface && !g_drawingCount && session_pending_job() != SESSION_JOB_LIST) {
+	if (g_uiSurface && !drawings_count() && session_pending_job() != SESSION_JOB_LIST) {
 		draw_text(g_uiSurface, FONT_SMALL, sheetLeft + SHEET_WIDTH / 2, EMPTY_HINT_Y, COLOR_DIM, ALIGN_CENTER,
 		          "No drawings yet");
 	}

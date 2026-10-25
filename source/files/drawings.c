@@ -11,6 +11,7 @@
 #include "paths.h"
 #include "render.h"
 #include "safe_file.h"
+#include "save_guard.h"
 
 #define THUMBNAILS_DIR APP_DIR "/thumbs"
 #define LAST_OPEN_PATH APP_DIR "/last.txt"
@@ -41,8 +42,8 @@
 #define THUMBNAIL_HEADER_SIZE 8
 #define THUMBNAIL_PIXEL_BYTES (DRAWING_THUMBNAIL_WIDTH * DRAWING_THUMBNAIL_HEIGHT * RGB_PIXEL_BYTES)
 
-DrawingFile g_drawings[DRAWINGS_MAX];
-int g_drawingCount;
+static DrawingFile g_drawings[DRAWINGS_MAX];
+static int g_drawingCount;
 char g_drawingName[DRAWING_NAME_MAX + 1] = DEFAULT_DRAWING_NAME;
 
 // Its .propaint path, in a static buffer that the next call overwrites.
@@ -120,6 +121,7 @@ static void recover_interrupted_saves(void)
 
 void drawings_init(void)
 {
+	save_guard_init();
 	mkdir(DRAWINGS_DIR, FOLDER_MODE);
 	mkdir(EXPORTS_DIR, FOLDER_MODE);
 	mkdir(THUMBNAILS_DIR, FOLDER_MODE);
@@ -320,6 +322,16 @@ void drawings_scan(void)
 	qsort(g_drawings, g_drawingCount, sizeof *g_drawings, newest_first);
 }
 
+int drawings_count(void)
+{
+	return g_drawingCount;
+}
+
+const DrawingFile *drawings_at(int index)
+{
+	return &g_drawings[index];
+}
+
 int drawings_find(const char *name)
 {
 	for (int i = 0; i < g_drawingCount; i++) {
@@ -332,7 +344,11 @@ int drawings_find(const char *name)
 
 bool drawings_save_open(void)
 {
-	if (!document_save(drawing_path(g_drawingName))) {
+	const char *path = drawing_path(g_drawingName);
+	save_guard_begin(path);
+	bool saved = document_save(path);
+	save_guard_end();
+	if (!saved) {
 		return false;
 	}
 	write_thumbnail(g_drawingName);
@@ -423,7 +439,11 @@ bool drawings_duplicate(const char *name, char *out, size_t outSize)
 	drawings_unique_name(base, out, outSize);
 	char sourcePath[PATH_SIZE];
 	snprintf(sourcePath, sizeof sourcePath, "%s", drawing_path(name));
-	if (!copy_file(sourcePath, drawing_path(out))) {
+	const char *copyPath = drawing_path(out);
+	save_guard_begin(copyPath);
+	bool copied = copy_file(sourcePath, copyPath);
+	save_guard_end();
+	if (!copied) {
 		return false;
 	}
 	snprintf(sourcePath, sizeof sourcePath, "%s", thumbnail_path(name));

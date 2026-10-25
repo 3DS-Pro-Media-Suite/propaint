@@ -5,7 +5,8 @@
 
 #define PRESSURE_NONE (-1.0f) // no pressure pen: the engine's pressure sensors then count as full
 
-extern bool g_pressureWanted; // pressure pen wanted (opens tpressure); on unless switched off
+bool pressure_wanted(void); // pressure pen wanted (opens tpressure); on unless switched off
+void pressure_restore_wanted(bool wanted); // the saved wish, before pressure_open
 
 void pressure_open(void); // at start-up, when it is wanted
 void pressure_close(void);

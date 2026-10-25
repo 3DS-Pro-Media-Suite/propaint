@@ -12,10 +12,7 @@
 #define PRESSURE_MAX_STEP 0.12f // most the pressure may move in one frame
 #define PRESSURE_BEFORE_READING 0.35f // a moderate pressure: "unknown" would count as full and spike
 
-#define CITRA_SYSTEM_INFO_TYPE 0x20000 // Citra answers this GetSystemInfo type; a real 3DS does not
-#define LUMA_SYSTEM_INFO_TYPE 0x10000 // Luma3DS answers this GetSystemInfo type with its version
-
-bool g_pressureWanted = true;
+static bool g_pressureWanted = true;
 
 static bool g_pressureOpen; // tpressure opened
 static int g_circlePadWait; // frames the Circle Pad is not read (see pressure_circle_pad_usable)
@@ -29,20 +26,6 @@ static void reset_filter(void)
 	g_validReadings = 0;
 	g_filteredPressure = -1;
 	g_pressureFrames = 0;
-}
-
-static float median_of_three(float a, float b, float c)
-{
-	if (a > b) {
-		if (b > c) {
-			return b;
-		}
-		return a > c ? c : a;
-	}
-	if (a > c) {
-		return a;
-	}
-	return b > c ? c : b;
 }
 
 void pressure_read(void)
@@ -59,7 +42,7 @@ void pressure_read(void)
 	g_validReadings++;
 	float smoothed = reading;
 	if (g_validReadings >= PRESSURE_MEDIAN_SIZE) {
-		smoothed = median_of_three(g_recentPressures[0], g_recentPressures[1], g_recentPressures[2]);
+		smoothed = tp_median_of_three(g_recentPressures[0], g_recentPressures[1], g_recentPressures[2]);
 	} else if (g_validReadings == 2) {
 		smoothed = (g_recentPressures[0] + g_recentPressures[1]) * 0.5f;
 	}
@@ -109,24 +92,20 @@ void pressure_stroke_end(void)
 	}
 }
 
-static bool running_in_emulator(void)
+bool pressure_wanted(void)
 {
-	s64 answer = 0;
-	Result result = svcGetSystemInfo(&answer, CITRA_SYSTEM_INFO_TYPE, 0);
-	return R_SUCCEEDED(result) && answer;
+	return g_pressureWanted;
 }
 
-static bool luma_installed(void)
+void pressure_restore_wanted(bool wanted)
 {
-	s64 version = 0;
-	Result result = svcGetSystemInfo(&version, LUMA_SYSTEM_INFO_TYPE, 0);
-	return R_SUCCEEDED(result) && version;
+	g_pressureWanted = wanted;
 }
 
 // Pressure needs the touch chip's own session (tpressure), opened only when asked for.
 void pressure_set_wanted(bool wanted)
 {
-	if (wanted && running_in_emulator()) {
+	if (wanted && tp_in_emulator()) {
 		app_toast("No pressure in an emulator");
 		wanted = false;
 	}
@@ -136,7 +115,7 @@ void pressure_set_wanted(bool wanted)
 			app_toast("This touch chip can't sense pressure");
 		} else if (!g_pressureOpen) {
 			// With Luma3DS, tp_open fails otherwise only when it gets no session of the touch chip's service.
-			app_toast(luma_installed() ? "No pressure: touch chip busy" : "No pressure: needs Luma3DS");
+			app_toast(tp_has_luma() ? "No pressure: touch chip busy" : "No pressure: needs Luma3DS");
 		}
 		if (!g_pressureOpen) {
 			wanted = false;
@@ -154,7 +133,7 @@ void pressure_set_wanted(bool wanted)
 // without the pressure scan never will, so there the switch shows off.
 void pressure_open(void)
 {
-	if (g_pressureWanted && !running_in_emulator()) {
+	if (g_pressureWanted && !tp_in_emulator()) {
 		g_pressureOpen = tp_open(NULL, 0);
 		if (!g_pressureOpen && tp_chip_unsupported()) {
 			g_pressureWanted = false;

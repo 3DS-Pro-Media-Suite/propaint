@@ -9,10 +9,6 @@
 #define ZOOM_STEP_COUNT 12
 #define ZOOM_STEP_FIT 0 // fits the page to the drawing area
 #define ZOOM_STEP_ONE 3 // zoom 1
-extern const float g_zoomSteps[ZOOM_STEP_COUNT];
-
-extern View g_view; // centerX/centerY: the canvas point at the centre of the drawing area
-extern int g_zoomStep;
 #define TOP_IMAGE_SHRINK 2 // the top image shows the whole page at half size
 #define TOP_IMAGE_WIDTH (CANVAS_WIDTH / TOP_IMAGE_SHRINK)
 
@@ -30,8 +26,11 @@ int page_view_left(void);
 int page_view_right(void);
 float page_view_center_x(void);
 float page_view_zoom_of_step(int step);
+const View *page_view_current(void); // centerX/centerY: the canvas point at the centre of the drawing area
+int page_view_zoom_step(void);
 void page_view_set_zoom_step(int step);
-void page_view_set_zoom(float zoom); // any zoom from fit to the largest step; g_zoomStep: the step below it
+// Any zoom from fit to the largest step. page_view_zoom_step() is then the step below it.
+void page_view_set_zoom(float zoom);
 void page_view_step_zoom(int direction); // to the next step up (direction > 0) or down from the current zoom
 void page_view_toggle_fit(void);
 void page_view_set_rotation(float radians, bool snap); // snap: near a quarter turn sticks to it

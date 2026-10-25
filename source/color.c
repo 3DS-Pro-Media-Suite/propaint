@@ -21,11 +21,11 @@ static const u8 DEFAULT_RECENT_COLORS[][3] = {
 #define PICKER_VALUE_DEFAULT 0.2f
 
 u8 g_color[3] = INK_COLOR_DEFAULT;
-float g_pickerHue;
-float g_pickerSaturation;
-float g_pickerValue;
-u8 g_recentColors[RECENT_COLORS_MAX][3];
-int g_recentColorCount;
+static float g_pickerHue;
+static float g_pickerSaturation;
+static float g_pickerValue;
+static u8 g_recentColors[RECENT_COLORS_MAX][3]; // newest first
+static int g_recentColorCount;
 
 void color_init(void)
 {
@@ -119,12 +119,40 @@ void color_set(const u8 rgb[3])
 }
 
 // Not color_set: going back from RGB would lose the hue of a grey.
-void color_set_from_picker(void)
+static void color_set_from_picker(void)
 {
 	u8 rgb[3];
 	color_hsv_to_rgb(g_pickerHue, g_pickerSaturation, g_pickerValue, rgb);
 	memcpy(g_color, rgb, sizeof g_color);
 	back_to_brush_tool();
+}
+
+float color_picker_hue(void)
+{
+	return g_pickerHue;
+}
+
+float color_picker_saturation(void)
+{
+	return g_pickerSaturation;
+}
+
+float color_picker_value(void)
+{
+	return g_pickerValue;
+}
+
+void color_pick_hue(float hue)
+{
+	g_pickerHue = hue;
+	color_set_from_picker();
+}
+
+void color_pick_shade(float saturation, float value)
+{
+	g_pickerSaturation = saturation;
+	g_pickerValue = value;
+	color_set_from_picker();
 }
 
 void color_push_recent(const u8 rgb[3])
@@ -143,4 +171,25 @@ void color_push_recent(const u8 rgb[3])
 	}
 	memmove(g_recentColors[1], g_recentColors[0], (size_t)index * sizeof g_recentColors[0]);
 	memcpy(g_recentColors[0], rgb, sizeof g_recentColors[0]);
+}
+
+int color_recent_count(void)
+{
+	return g_recentColorCount;
+}
+
+const u8 *color_recent(int index)
+{
+	return g_recentColors[index];
+}
+
+void color_recent_copy(u8 colors[RECENT_COLORS_MAX][3])
+{
+	memcpy(colors, g_recentColors, sizeof g_recentColors);
+}
+
+void color_recent_restore(const u8 colors[RECENT_COLORS_MAX][3], int count)
+{
+	g_recentColorCount = count;
+	memcpy(g_recentColors, colors, sizeof g_recentColors);
 }

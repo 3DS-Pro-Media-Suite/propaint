@@ -1,4 +1,3 @@
-#include <stdlib.h>
 #include <string.h>
 #include "screens.h"
 #include "app_state.h"
@@ -72,17 +71,44 @@
 #define STATUS_SEPARATOR_HEIGHT 1
 #define STATUS_TOOL_ICON_X (STATUS_MARGIN + STATUS_CHIP_SIZE + STATUS_MARGIN)
 
-// The bottom screen is composed again only when something can have changed it (input, a toast, a stroke, a
-// render); drawing the sheets and the palette is slow, so otherwise the last picture is copied.
-static u8 *g_lastBottom;
+// A screen's two framebuffers take turns, so the one drawn into still holds the picture of two frames ago.
+typedef struct {
+	const u8 *shown; // the framebuffer on the screen: the last one drawn into. NULL: neither is up to date
+	bool otherBehind; // the other framebuffer, the next one drawn into, lacks the shown picture
+} ScreenBuffers;
+
+static ScreenBuffers g_bottomBuffers;
+static ScreenBuffers g_topBuffers;
+
+static void picture_composed(ScreenBuffers *buffers, const u8 *pixels)
+{
+	buffers->shown = pixels;
+	buffers->otherBehind = true;
+}
+
+// The picture stays. The framebuffer to draw into gets it from the shown one, unless it holds it already.
+static void picture_kept(ScreenBuffers *buffers, u8 *pixels, size_t bytes)
+{
+	if (buffers->otherBehind) {
+		memcpy(pixels, buffers->shown, bytes);
+		buffers->otherBehind = false;
+	}
+	buffers->shown = pixels;
+}
+
+void screens_forget_pictures(void)
+{
+	g_bottomBuffers.shown = NULL;
+	g_topBuffers.shown = NULL;
+}
 
 // The brush size, around the stylus or in the middle of the drawing area.
 static void draw_size_ring(Surface *screen)
 {
 	u32 ringColor = g_tool == TOOL_ERASER ? COLOR_WARNING : COLOR_WHITE;
-	float radius = g_brushRadius * g_view.zoom;
-	float ringX = g_penDown ? g_stylusX + 0.5f : page_view_center_x();
-	float ringY = g_penDown ? g_stylusY + 0.5f : SCREEN_HEIGHT / 2;
+	float radius = g_brushRadius * page_view_current()->zoom;
+	float ringX = g_penDown ? pen_stylus_x() + 0.5f : page_view_center_x();
+	float ringY = g_penDown ? pen_stylus_y() + 0.5f : SCREEN_HEIGHT / 2;
 	draw_ring(screen, ringX, ringY, radius + SIZE_RING_SHADOW_OFFSET, COLOR_BLACK, SIZE_RING_SHADOW_ALPHA);
 	draw_ring(screen, ringX, ringY, radius, ringColor, SIZE_RING_ALPHA);
 }
@@ -90,9 +116,10 @@ static void draw_size_ring(Surface *screen)
 // The colour under the stylus while it picks one.
 static void draw_loupe(Surface *screen)
 {
-	int loupeX = g_stylusX;
-	bool nearTopEdge = g_stylusY - LOUPE_DISTANCE < LOUPE_MIN_Y;
-	int loupeY = nearTopEdge ? g_stylusY + LOUPE_DISTANCE : g_stylusY - LOUPE_DISTANCE;
+	int loupeX = pen_stylus_x();
+	int stylusY = pen_stylus_y();
+	bool nearTopEdge = stylusY - LOUPE_DISTANCE < LOUPE_MIN_Y;
+	int loupeY = nearTopEdge ? stylusY + LOUPE_DISTANCE : stylusY - LOUPE_DISTANCE;
 	draw_disc(screen, loupeX, loupeY, LOUPE_OUTLINE_RADIUS, COLOR_BLACK);
 	draw_disc(screen, loupeX, loupeY, LOUPE_RIM_RADIUS, COLOR_WHITE);
 	draw_disc(screen, loupeX, loupeY, LOUPE_COLOR_RADIUS, draw_color(g_color));
@@ -103,7 +130,7 @@ static void draw_toast(Surface *screen)
 	const char *text = app_toast_text();
 	int toastWidth = draw_text_width(FONT_SMALL, text) + 2 * TOAST_PADDING;
 	int centerX = (int)page_view_center_x();
-	int toastY = g_openSheet != SHEET_NONE ? TOAST_Y_WITH_SHEET : TOAST_Y;
+	int toastY = ui_current_sheet() != SHEET_NONE ? TOAST_Y_WITH_SHEET : TOAST_Y;
 	draw_rounded_rect(screen, centerX - toastWidth / 2, toastY, toastWidth, TOAST_HEIGHT, TOAST_COLOR);
 	draw_text(screen, FONT_SMALL, centerX, toastY + TOAST_TEXT_Y, COLOR_TEXT, ALIGN_CENTER, "%s", text);
 }
@@ -112,7 +139,7 @@ static void draw_bottom_full(Surface *screen)
 {
 	brush_sheet_reset_preview_budget();
 	memcpy(screen->pixels, page_view_bottom_image(), BOTTOM_FRAMEBUFFER_BYTES);
-	if (g_openSheet == SHEET_NONE) {
+	if (ui_current_sheet() == SHEET_NONE) {
 		if (g_penDown || rail_size_ring_shown()) {
 			draw_size_ring(screen);
 		}
@@ -128,19 +155,16 @@ static void draw_bottom_full(Surface *screen)
 	}
 }
 
+// The bottom screen is composed again only when something can have changed it (input, a toast, a stroke, a
+// render); drawing the sheets and the palette is slow, so otherwise the picture is kept.
 static void draw_bottom(Surface *screen)
 {
-	if (app_bottom_redraw_pending() || !g_lastBottom) {
+	if (app_bottom_redraw_pending() || !g_bottomBuffers.shown) {
 		draw_bottom_full(screen);
 		app_bottom_redraw_done();
-		if (!g_lastBottom) {
-			g_lastBottom = malloc(BOTTOM_FRAMEBUFFER_BYTES);
-		}
-		if (g_lastBottom) {
-			memcpy(g_lastBottom, screen->pixels, BOTTOM_FRAMEBUFFER_BYTES);
-		}
+		picture_composed(&g_bottomBuffers, screen->pixels);
 	} else {
-		memcpy(screen->pixels, g_lastBottom, BOTTOM_FRAMEBUFFER_BYTES);
+		picture_kept(&g_bottomBuffers, screen->pixels, BOTTOM_FRAMEBUFFER_BYTES);
 	}
 }
 
@@ -242,7 +266,7 @@ static void draw_zoom_label(Surface *screen, int pageX)
 {
 	int labelX = g_leftHanded ? pageX + TOP_IMAGE_WIDTH - ZOOM_LABEL_MARGIN : pageX + ZOOM_LABEL_MARGIN;
 	int align = g_leftHanded ? ALIGN_RIGHT : ALIGN_LEFT;
-	int percent = (int)(g_view.zoom * 100 + 0.5f);
+	int percent = (int)(page_view_current()->zoom * 100 + 0.5f);
 	draw_text(screen, FONT_SMALL, labelX, ZOOM_LABEL_Y, ZOOM_LABEL_COLOR, align, "%d%%", percent);
 }
 
@@ -265,21 +289,18 @@ static void draw_top_full(Surface *screen)
 	memcpy(screen->pixels + pageX * FRAMEBUFFER_COLUMN_BYTES, page_view_top_image(),
 	       TOP_IMAGE_WIDTH * FRAMEBUFFER_COLUMN_BYTES);
 	draw_fill(screen, panelX, 0, LAYER_PANEL_WIDTH, SCREEN_HEIGHT, COLOR_RAIL, 255);
-	if (g_zoomStep != ZOOM_STEP_FIT || g_view.rotation != 0) {
+	if (page_view_zoom_step() != ZOOM_STEP_FIT || page_view_current()->rotation != 0) {
 		draw_view_outline(screen, pageX);
 	}
 	draw_layer_stack(screen, panelX);
 	draw_brush_status(screen, panelX);
-	if (g_zoomStep != ZOOM_STEP_FIT) {
+	if (page_view_zoom_step() != ZOOM_STEP_FIT) {
 		draw_zoom_label(screen, pageX);
 	}
 	if (!g_mascotHidden) {
 		draw_mascot(screen, pageX);
 	}
 }
-
-// The top screen is composed again only when something on it changed; otherwise the last picture is copied.
-static u8 *g_lastTop;
 
 // What draw_top_full shows besides the page image, the thumbnails and the mascot.
 typedef struct {
@@ -310,8 +331,8 @@ static bool top_state_changed(void)
 	static TopScreenState lastState;
 	TopScreenState state;
 	memset(&state, 0, sizeof state); // memcmp compares the padding and the unused layers too
-	state.view = g_view;
-	state.zoomStep = g_zoomStep;
+	state.view = *page_view_current();
+	state.zoomStep = page_view_zoom_step();
 	state.viewLeft = page_view_left();
 	state.viewRight = page_view_right();
 	state.layerCount = g_document.layerCount;
@@ -337,21 +358,17 @@ static bool top_state_changed(void)
 	return true;
 }
 
+// The top screen is composed again only when something on it changed; otherwise the picture is kept.
 static void draw_top(Surface *screen)
 {
 	bool stateChanged = top_state_changed();
 	bool mascotChanged = !g_mascotHidden && mascot_changed();
 	bool imageChanged = page_view_take_top_changed();
-	if (imageChanged || stateChanged || mascotChanged || !g_lastTop) {
+	if (imageChanged || stateChanged || mascotChanged || !g_topBuffers.shown) {
 		draw_top_full(screen);
-		if (!g_lastTop) {
-			g_lastTop = malloc(TOP_FRAMEBUFFER_BYTES);
-		}
-		if (g_lastTop) {
-			memcpy(g_lastTop, screen->pixels, TOP_FRAMEBUFFER_BYTES);
-		}
+		picture_composed(&g_topBuffers, screen->pixels);
 	} else {
-		memcpy(screen->pixels, g_lastTop, TOP_FRAMEBUFFER_BYTES);
+		picture_kept(&g_topBuffers, screen->pixels, TOP_FRAMEBUFFER_BYTES);
 	}
 }
 
@@ -360,7 +377,7 @@ static bool bottom_screen_busy(u32 pressedKeys, u32 releasedKeys, bool rendered)
 {
 	bool keysChanged = pressedKeys | releasedKeys;
 	bool widgetHeld = g_touch.held && widget_is_dragging();
-	bool stylusBusy = g_penDown || g_panning || g_sampling;
+	bool stylusBusy = g_penDown || input_panning() || g_sampling;
 	return keysChanged || widgetHeld || stylusBusy || session_pending_job() != SESSION_JOB_NONE || rendered;
 }
 

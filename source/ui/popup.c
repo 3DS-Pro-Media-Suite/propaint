@@ -138,11 +138,12 @@ static void layout_palette(Palette *palette)
 			palette->favoriteCount++;
 		}
 	}
-	palette->recentCount = g_recentColorCount < RECENT_COLORS_MAX ? g_recentColorCount : RECENT_COLORS_MAX;
+	int recentCount = color_recent_count();
+	palette->recentCount = recentCount < RECENT_COLORS_MAX ? recentCount : RECENT_COLORS_MAX;
 	palette->zoomTrackX =
 	        g_leftHanded ? page_view_left() + ZOOM_TRACK_INSET : page_view_right() - ZOOM_TRACK_INSET;
 	palette->minZoom = page_view_zoom_of_step(ZOOM_STEP_FIT);
-	palette->maxZoom = g_zoomSteps[ZOOM_STEP_COUNT - 1];
+	palette->maxZoom = page_view_zoom_of_step(ZOOM_STEP_COUNT - 1);
 }
 
 static void corner_position(int corner, int *x, int *y)
@@ -165,7 +166,7 @@ static void press_corner(int corner)
 {
 	if (corner == CORNER_MIRROR) {
 		page_view_toggle_mirror();
-		app_toast(g_view.mirrored ? "Mirrored" : "Not mirrored");
+		app_toast(page_view_current()->mirrored ? "Mirrored" : "Not mirrored");
 	} else if (corner == CORNER_ROTATION) {
 		page_view_set_rotation(0, false);
 	} else if (corner == CORNER_ZOOM_ONE) {
@@ -242,7 +243,7 @@ static bool pick_recent_color(const Palette *palette)
 		float offsetX = palette->centerX + cosf(angle) * RECENT_RING_RADIUS - g_touch.x;
 		float offsetY = palette->centerY + sinf(angle) * RECENT_RING_RADIUS - g_touch.y;
 		if (offsetX * offsetX + offsetY * offsetY < RECENT_SPOT_HIT_RADIUS * RECENT_SPOT_HIT_RADIUS) {
-			color_set(g_recentColors[k]);
+			color_set(color_recent(k));
 			return true;
 		}
 	}
@@ -300,14 +301,12 @@ static void drag_zoom(const Palette *palette)
 static void drag_color(float dx, float dy)
 {
 	if (widget_captured(WIDGET_PALETTE_HUE_RING)) {
-		g_pickerHue = wrap_degrees(atan2f(dy, dx) * RADIANS_TO_DEGREES_ROUNDED + QUARTER_TURN_DEGREES);
+		color_pick_hue(wrap_degrees(atan2f(dy, dx) * RADIANS_TO_DEGREES_ROUNDED + QUARTER_TURN_DEGREES));
 	} else {
 		float saturation = (dx + SQUARE_HALF) / SQUARE_SIZE;
 		float darkness = (dy + SQUARE_HALF) / SQUARE_SIZE;
-		g_pickerSaturation = clamp_unit(saturation);
-		g_pickerValue = 1 - clamp_unit(darkness);
+		color_pick_shade(clamp_unit(saturation), 1 - clamp_unit(darkness));
 	}
-	color_set_from_picker();
 }
 
 static void take_input(const Palette *palette)
@@ -354,8 +353,9 @@ static void draw_rotation_ring(const Palette *palette)
 		draw_line(g_uiSurface, centerX + sinf(angle) * tickInner, centerY - cosf(angle) * tickInner,
 		          centerX + sinf(angle) * tickOuter, centerY - cosf(angle) * tickOuter, COLOR_DISABLED);
 	}
-	float knobX = centerX + sinf(g_view.rotation) * ROTATION_RING_RADIUS;
-	float knobY = centerY - cosf(g_view.rotation) * ROTATION_RING_RADIUS;
+	float rotation = page_view_current()->rotation;
+	float knobX = centerX + sinf(rotation) * ROTATION_RING_RADIUS;
+	float knobY = centerY - cosf(rotation) * ROTATION_RING_RADIUS;
 	draw_disc(g_uiSurface, knobX, knobY, KNOB_OUTLINE_RADIUS, COLOR_RAIL);
 	draw_disc(g_uiSurface, knobX, knobY, KNOB_RADIUS,
 	          widget_captured(WIDGET_PALETTE_ROTATION) ? COLOR_ACCENT : COLOR_TEXT);
@@ -402,7 +402,7 @@ static void draw_hue_ring(const Palette *palette)
 		}
 	}
 	// The marker on the picked hue, in the middle of the ring.
-	float angle = (g_pickerHue - QUARTER_TURN_DEGREES) * DEGREES_TO_RADIANS_ROUNDED;
+	float angle = (color_picker_hue() - QUARTER_TURN_DEGREES) * DEGREES_TO_RADIANS_ROUNDED;
 	float middleRadius = (HUE_RING_INNER_RADIUS + HUE_RING_OUTER_RADIUS) * 0.5f;
 	float markerX = palette->centerX + cosf(angle) * middleRadius;
 	float markerY = palette->centerY + sinf(angle) * middleRadius;
@@ -414,7 +414,7 @@ static void draw_hue_ring(const Palette *palette)
 static void draw_color_square(const Palette *palette)
 {
 	u8 hue[3];
-	color_hsv_to_rgb(g_pickerHue, 1, 1, hue);
+	color_hsv_to_rgb(color_picker_hue(), 1, 1, hue);
 	int left = palette->centerX - SQUARE_HALF;
 	int top = palette->centerY - SQUARE_HALF;
 	for (int x = 0; x < SQUARE_SIZE; x++) {
@@ -426,8 +426,8 @@ static void draw_color_square(const Palette *palette)
 			draw_pixel(g_uiSurface, left + x, top + y, RGB(rgb[0], rgb[1], rgb[2]), 255);
 		}
 	}
-	float markerX = left + g_pickerSaturation * (SQUARE_SIZE - 1);
-	float markerY = top + (1 - g_pickerValue) * (SQUARE_SIZE - 1);
+	float markerX = left + color_picker_saturation() * (SQUARE_SIZE - 1);
+	float markerY = top + (1 - color_picker_value()) * (SQUARE_SIZE - 1);
 	draw_ring(g_uiSurface, markerX, markerY, SQUARE_MARKER_RADIUS + MARKER_OUTLINE, COLOR_BLACK, 255);
 	draw_ring(g_uiSurface, markerX, markerY, SQUARE_MARKER_RADIUS, COLOR_WHITE, 255);
 }
@@ -439,7 +439,7 @@ static void draw_recent_colors(const Palette *palette)
 		float spotX = palette->centerX + cosf(angle) * RECENT_RING_RADIUS;
 		float spotY = palette->centerY + sinf(angle) * RECENT_RING_RADIUS;
 		draw_disc(g_uiSurface, spotX, spotY, RECENT_SPOT_OUTLINE_RADIUS, COLOR_WIDGET_LIGHT);
-		draw_disc(g_uiSurface, spotX, spotY, RECENT_SPOT_RADIUS, draw_color(g_recentColors[k]));
+		draw_disc(g_uiSurface, spotX, spotY, RECENT_SPOT_RADIUS, draw_color(color_recent(k)));
 	}
 }
 
@@ -484,17 +484,17 @@ static void draw_favorites(const Palette *palette)
 
 static bool zoom_is_one(void)
 {
-	return fabsf(g_view.zoom - 1) < ZOOM_ONE_TOLERANCE;
+	return fabsf(page_view_current()->zoom - 1) < ZOOM_ONE_TOLERANCE;
 }
 
 // A lit corner shows a changed setting that a tap resets.
 static bool corner_lit(int corner)
 {
 	if (corner == CORNER_MIRROR) {
-		return g_view.mirrored;
+		return page_view_current()->mirrored;
 	}
 	if (corner == CORNER_ROTATION) {
-		return g_view.rotation != 0;
+		return page_view_current()->rotation != 0;
 	}
 	if (corner == CORNER_ZOOM_ONE) {
 		return !zoom_is_one();
@@ -504,11 +504,12 @@ static bool corner_lit(int corner)
 
 static const char *corner_label(int corner)
 {
-	if (corner == CORNER_ROTATION && g_view.rotation != 0) {
-		return draw_format("%d deg", (int)lroundf(g_view.rotation * RADIANS_TO_DEGREES_ROUNDED));
+	const View *view = page_view_current();
+	if (corner == CORNER_ROTATION && view->rotation != 0) {
+		return draw_format("%d deg", (int)lroundf(view->rotation * RADIANS_TO_DEGREES_ROUNDED));
 	}
 	if (corner == CORNER_ZOOM_ONE && !zoom_is_one()) {
-		return draw_format("%d%%", (int)(g_view.zoom * 100 + 0.5f));
+		return draw_format("%d%%", (int)(view->zoom * 100 + 0.5f));
 	}
 	return CORNER_LABELS[corner];
 }
@@ -537,7 +538,8 @@ static void draw_zoom_slider(const Palette *palette)
 	                  ZOOM_BACKGROUND_WIDTH, sliderHeight + 2 * ZOOM_SLIDER_PADDING, COLOR_RAIL);
 	draw_fill(g_uiSurface, trackX - ZOOM_TRACK_WIDTH / 2, ZOOM_SLIDER_TOP, ZOOM_TRACK_WIDTH, sliderHeight,
 	          COLOR_WIDGET_LIGHT, 255);
-	float position = logf(g_view.zoom / palette->minZoom) / logf(palette->maxZoom / palette->minZoom);
+	float zoom = page_view_current()->zoom;
+	float position = logf(zoom / palette->minZoom) / logf(palette->maxZoom / palette->minZoom);
 	float knobY = ZOOM_SLIDER_BOTTOM - position * sliderHeight;
 	draw_disc(g_uiSurface, trackX, knobY, KNOB_RADIUS,
 	          widget_captured(WIDGET_PALETTE_ZOOM) ? COLOR_ACCENT : COLOR_TEXT);

@@ -50,7 +50,7 @@ void menu_sheet(int sheetLeft)
 		session_save(false);
 	}
 	if (menu_tile(rightX, y, IC_EXPORT, "Export",
-	              g_exportFormat == EXPORT_ORA ? "Layered .ora" : "PNG image")) {
+	              drawings_sheet_export_format() == EXPORT_ORA ? "Layered .ora" : "PNG image")) {
 		ui_open_sheet(SHEET_EXPORT);
 		return;
 	}

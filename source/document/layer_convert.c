@@ -13,7 +13,6 @@
 #define SHAPE_ALPHA_THRESHOLD 128 // pixels with at least this alpha become the shape
 #define DISTANCE_UNREACHED 1e9f // larger than any distance on the canvas
 #define EDGE_OFFSET 0.5f // the edge lies halfway between an inside and an outside pixel
-#define SDF_LIMIT 127 // field values are stored as s8
 // Chamfer distances to a straight and to a diagonal neighbour.
 #define STRAIGHT_STEP 1.0f
 #define DIAGONAL_STEP 1.41421356f // sqrt(2)
@@ -26,10 +25,11 @@ static u8 *canvas_pixel(u8 *pixels, int x, int y)
 // The layer as it looks at zoom 1, as a new pixel map. NULL when out of memory.
 static u8 *render_layer_pixels(const Layer *layer)
 {
-	u8 *pixels = calloc(CANVAS_PIXELS, RGBA_PIXEL_BYTES);
+	u8 *pixels = undo_malloc(CANVAS_PIXELS * RGBA_PIXEL_BYTES);
 	if (!pixels) {
 		return NULL;
 	}
+	memset(pixels, 0, CANVAS_PIXELS * RGBA_PIXEL_BYTES);
 	for (int y = 0; y < CANVAS_HEIGHT; y++) {
 		for (int x = 0; x < CANVAS_WIDTH; x++) {
 			float color[RGB_CHANNELS];
@@ -129,11 +129,11 @@ static bool is_shape_pixel(const u8 *pixels, size_t index)
 
 static s8 clamp_to_field(float value)
 {
-	if (value < -SDF_LIMIT) {
-		return -SDF_LIMIT;
+	if (value < -SDF_FAR) {
+		return -SDF_FAR;
 	}
-	if (value > SDF_LIMIT) {
-		return SDF_LIMIT;
+	if (value > SDF_FAR) {
+		return SDF_FAR;
 	}
 	return (s8)value;
 }
@@ -148,9 +148,9 @@ bool layer_to_sdf(int layerIndex)
 		return true;
 	}
 	// Inside pixels measure to the nearest outside pixel, outside pixels to the nearest inside pixel.
-	float *distanceToOutside = malloc(CANVAS_PIXELS * sizeof(float));
-	float *distanceToInside = malloc(CANVAS_PIXELS * sizeof(float));
-	s8 *field = malloc(CANVAS_PIXELS);
+	float *distanceToOutside = undo_malloc(CANVAS_PIXELS * sizeof(float));
+	float *distanceToInside = undo_malloc(CANVAS_PIXELS * sizeof(float));
+	s8 *field = undo_malloc(CANVAS_PIXELS);
 	if (!distanceToOutside || !distanceToInside || !field) {
 		free(distanceToOutside);
 		free(distanceToInside);
@@ -275,10 +275,11 @@ int layer_merge_down(int layerIndex)
 // The group's layers composited at zoom 1, as a new pixel map. NULL when out of memory.
 static u8 *render_group_pixels(int firstLayer, int lastLayer)
 {
-	u8 *pixels = calloc(CANVAS_PIXELS, RGBA_PIXEL_BYTES);
+	u8 *pixels = undo_malloc(CANVAS_PIXELS * RGBA_PIXEL_BYTES);
 	if (!pixels) {
 		return NULL;
 	}
+	memset(pixels, 0, CANVAS_PIXELS * RGBA_PIXEL_BYTES);
 	render_prep();
 	for (int y = 0; y < CANVAS_HEIGHT; y++) {
 		for (int x = 0; x < CANVAS_WIDTH; x++) {
